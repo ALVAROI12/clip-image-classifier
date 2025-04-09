@@ -14,13 +14,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+# Lazy-load model and processor
+model = None
+processor = None
 
 labels = ["cat", "dog", "car", "plane", "tree", "book", "laptop", "shoe", "cup", "phone"]
 
+@app.on_event("startup")
+async def load_model():
+    global model, processor
+    model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+
 @app.post("/classify")
 async def classify_image(file: UploadFile = File(...)):
+    global model, processor
+    if model is None or processor is None:
+        raise RuntimeError("Model not loaded")
+
     image = Image.open(io.BytesIO(await file.read())).convert("RGB")
     inputs = processor(text=labels, images=image, return_tensors="pt", padding=True)
     outputs = model(**inputs)
