@@ -6,7 +6,7 @@ st.set_page_config(page_title="CLIP Image Classifier", layout="centered")
 st.title("🧠 CLIP Image Classifier")
 st.write("Upload an image to classify it using CLIP (local backend).")
 
-API_URL = "http://127.0.0.1:8000/classify"
+API_URL = "https://clip-api-395534824176.us-central1.run.app/classify"
 
 uploaded_file = st.file_uploader("Choose an image", type=["jpg", "jpeg", "png"])
 
