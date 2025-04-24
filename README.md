@@ -79,8 +79,6 @@ Demo link: demo_link.txt
 
 Screenshots of API and UI included for presentation/report
 
-
-
 ## Features
 - Upload images using `/classify` API
 - Get predictions for labels like cat, dog, car, etc.
