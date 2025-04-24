@@ -1,39 +1,52 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from PIL import Image
 from transformers import CLIPProcessor, CLIPModel
+from PIL import Image, UnidentifiedImageError
+from io import BytesIO
 import torch
-import io
 
+# ✅ Create the FastAPI app
 app = FastAPI()
 
+# ✅ Allow requests from any origin (for Streamlit frontend)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Lazy-load model and processor
-model = None
-processor = None
+# ✅ Load the CLIP model and processor once at startup
+model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
+# ✅ Define classification labels
 labels = ["cat", "dog", "car", "plane", "tree", "book", "laptop", "shoe", "cup", "phone"]
 
-@app.on_event("startup")
-async def load_model():
-    global model, processor
-    model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-
+# ✅ POST endpoint for image classification
 @app.post("/classify")
 async def classify_image(file: UploadFile = File(...)):
-    global model, processor
-    if model is None or processor is None:
-        raise RuntimeError("Model not loaded")
+    try:
+        contents = await file.read()
+        print(f"📦 File name: {file.filename}")
+        print(f"📎 Content type: {file.content_type}")
+        print(f"🧱 Byte size: {len(contents)}")
 
-    image = Image.open(io.BytesIO(await file.read())).convert("RGB")
-    inputs = processor(text=labels, images=image, return_tensors="pt", padding=True)
-    outputs = model(**inputs)
-    probs = torch.nn.functional.softmax(outputs.logits_per_image, dim=1)[0]
-    return {label: float(prob) for label, prob in zip(labels, probs)}
+        image = Image.open(BytesIO(contents)).convert("RGB")
+
+    except UnidentifiedImageError:
+        return {"error": "Uploaded file is not a valid image. Please try a JPG or PNG."}
+    except Exception as e:
+        return {"error": f"Failed to process image: {str(e)}"}
+
+    try:
+        inputs = processor(text=labels, images=image, return_tensors="pt", padding=True)
+        outputs = model(**inputs)
+        logits_per_image = outputs.logits_per_image
+        probs = logits_per_image.softmax(dim=1).tolist()[0]
+
+        return {label: round(float(prob), 4) for label, prob in zip(labels, probs)}
+
+    except Exception as e:
+        return {"error": f"Inference failed: {str(e)}"}
